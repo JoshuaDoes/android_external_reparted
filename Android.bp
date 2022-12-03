@@ -1,0 +1,12 @@
+//
+// reparted orchestrates the application of a dynamic partition configuration when required
+//
+
+blueprint_go_binary {
+	name: "reparted",
+	srcs: [
+		"cmd/reparted/reparted.go",
+		"cmd/reparted/parted.go",
+		"cmd/reparted/partitions.go",
+	],
+}

@@ -1,0 +1,14 @@
+{
+	"disk": "/dev/block/sda",
+	"parted": "./parted",
+	"reserved": [
+		{"name": "BOOT", "num": 5, "size": "100MiB"},
+		{"name": "RECOVERY", "num": 6, "size": "100MiB"},
+		{"name": "HIDDEN", "size": "350MiB"},
+		{"name": "SYSTEM", "size": "5GiB"},
+		{"name": "CACHE", "size": "100MiB"}
+	],
+	"userdata": [
+		{"name": "USERDATA"}
+	]
+}

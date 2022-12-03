@@ -1,0 +1,2 @@
+# Ignore the bin/ contents, you must provide parted yourself
+bin/
