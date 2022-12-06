@@ -2,7 +2,7 @@
 cls
 
 echo [*] Building reparted
-pushd cmd & set GOOS=linux & set GOARCH=arm64 & set GO111MODULE=off & go build -o ..\bin\reparted .\ & popd
+pushd cmd & go env -w GOOS=linux GOARCH=arm64 GO111MODULE=off & go build -o ..\bin\reparted .\ & popd
 
 echo [*] Creating ramdisk
 adb shell umount /mnt/ramdisk & adb shell mkdir -p /mnt/ramdisk & adb shell mount -t ramfs -o size=1M ramfs /mnt/ramdisk

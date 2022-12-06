@@ -39,10 +39,10 @@ func main() {
 	}
 
 	log("Disk model: %s", p.DiskModel)
-	log("Disk total size: %d (%d logical / %d physical)", p.DiskSize, p.SectorSizeLogical, p.SectorSizePhysical)
+	log("Disk total size: %s (%s logical / %s physical)", bytes(p.DiskSize), bytes(p.SectorSizeLogical), bytes(p.SectorSizePhysical))
 	log("Disk flags: %s", p.DiskFlags)
 	log("Partition table: %s", p.PartitionTable)
-	log("Size of partition table: %d (partitions: %d)", p.TableSize, p.PartsSize)
+	log("Size of partition table: %s (partitions: %s)", bytes(p.TableSize), bytes(p.PartsSize))
 
 	// Calculate the total amount of space that needs to be reserved for the new partition table.
 	reserve := int64(0)
@@ -68,9 +68,9 @@ func main() {
 	// A positive reserve size is the size that will be taken from userdata.
 	// A negative reserve size is the size that will be awarded to userdata.
 	if reserve > 0 {
-		log("Need to reserve %s/%s for new partition table", bytes(reserve), bytes(p.DiskSize))
+		log("Need to reserve %s from userdata for new partition table", bytes(reserve))
 	} else if reserve < 0 {
-		log("Need to free %s/%s for new partition table", bytes(reserve * -1), bytes(p.DiskSize))
+		log("Need to award %s to userdata for new partition table", bytes(reserve * -1))
 	} else {
 		log("No additional space will be freed or reserved for new partition table")
 	}

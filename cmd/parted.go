@@ -22,9 +22,9 @@ type Parted struct {
 	// The partition table type, such as "gpt".
 	PartitionTable string
 	// The logical sector size of the disk.
-	SectorSizeLogical int
+	SectorSizeLogical int64
 	// The physical sector size of the disk.
-	SectorSizePhysical int
+	SectorSizePhysical int64
 	// The total size of the disk in bytes.
 	DiskSize int64
 	// The size of the partition table in bytes.
@@ -64,13 +64,13 @@ func (p *Parted) Close() {
 	p.File.Close()
 }
 
-func (p *Parted) ReadDisk(offset int64, num int) ([]byte, error) {
-	data := make([]byte, num)
+func (p *Parted) ReadDisk(offset int64, count int64) ([]byte, error) {
+	data := make([]byte, count)
 	read, err := p.File.ReadAt(data, offset)
 	if err != nil && err != io.EOF {
 		return nil, err
 	}
-	if read < num {
+	if read < int(count) {
 		data = data[:read]
 	}
 

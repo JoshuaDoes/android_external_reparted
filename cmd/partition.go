@@ -43,7 +43,7 @@ func (part *Partition) GetSize() int64 {
 
 //CheckValidOrPanic checks if the partition is valid, otherwise it panics
 func (part *Partition) CheckValidOrPanic() {
-	checkCount := part.Parted.SectorSizeLogical //Only check one logical sector
+	checkCount := int64(part.Parted.SectorSizeLogical) //Only check one logical sector
 	checkOffset := int64(0) //Check from the beginning of the partition
 
 	if *part.Number == 0 || *part.FS == "Free Space" {
@@ -58,7 +58,7 @@ func (part *Partition) CheckValidOrPanic() {
 	if err != nil {
 		panic(fmt.Sprintf("Failed to read %d bytes from partition %d at offset %d: %v", checkCount, *part.Number, checkOffset, err))
 	}
-	if len(startingBytes) < checkCount {
+	if len(startingBytes) < int(checkCount) {
 		panic(fmt.Sprintf("Failed to read %d bytes from partition %d at offset %d, got %d bytes instead", checkCount, *part.Number, checkOffset, len(startingBytes)))
 	}
 
@@ -67,11 +67,11 @@ func (part *Partition) CheckValidOrPanic() {
 	if err != nil {
 		panic(fmt.Sprintf("Failed to read %d bytes from disk at offset %d: %v", *part.Start, diskOffset, err))
 	}
-	if len(diskBytes) < checkCount {
+	if len(diskBytes) < int(checkCount) {
 		panic(fmt.Sprintf("Failed to read %d bytes from disk at offset %d, got %d bytes instead", checkCount, diskOffset, len(diskBytes)))
 	}
 
-	for j := int64(0); j < int64(checkCount); j++ {
+	for j := int64(0); j < checkCount; j++ {
 		if startingBytes[j] != diskBytes[j] {
 			panic(fmt.Sprintf("Byte %d on partition %d does not match byte %d on disk, %d != %d", checkOffset + j, *part.Number, diskOffset + j, startingBytes[j], diskBytes[j]))
 		}
@@ -99,18 +99,18 @@ func (part *Partition) Close() error {
 	return nil
 }
 
-func (part *Partition) Read(offset int64, num int) ([]byte, error) {
+func (part *Partition) Read(offset int64, count int64) ([]byte, error) {
 	if err := part.Open(); err != nil {
 		return nil, err
 	}
 	defer part.Close()
 
-	data := make([]byte, num)
+	data := make([]byte, count)
 	read, err := part.File.ReadAt(data, offset)
 	if err != nil && err != io.EOF {
 		return nil, err
 	}
-	if read < num {
+	if read < int(count) {
 		data = data[:read]
 	}
 
