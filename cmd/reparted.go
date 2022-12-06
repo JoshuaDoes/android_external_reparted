@@ -53,7 +53,7 @@ func main() {
 		reserve += reserveSize
 
 		// Check if the reserved partition matches an existing partition on the disk.
-		actualPart := p.GetPartition(reservePart)
+		actualPart := p.GetPartition(false, reservePart)
 		if actualPart == nil {
 			fatal("Reserved partition %d could not be matched to disk", i+1)
 		}

@@ -77,30 +77,66 @@ func (p *Parted) ReadDisk(offset int64, count int64) ([]byte, error) {
 	return data, nil
 }
 
-func (p *Parted) GetPartition(match *Partition) *Partition {
+func (p *Parted) GetPartition(reserved bool, match *Partition) *Partition {
 	if match.Name != nil {
-		return p.GetPartitionByName(*match.Name)
+		return p.GetPartitionByName(reserved, *match.Name)
 	}
 	if match.Number != nil {
-		return p.GetPartitionByNum(*match.Number)
+		return p.GetPartitionByNum(reserved, *match.Number)
 	}
 	return nil
 }
-func (p *Parted) GetPartitionByName(name string) *Partition {
-	for i := 0; i < len(p.Partitions); i++ {
-		if *p.Partitions[i].Name == name {
-			return p.Partitions[i]
+func (p *Parted) GetPartitionByName(reserved bool, name string) *Partition {
+	if reserved {
+		for i := 0; i < len(p.Config.Reserved); i++ {
+			if *p.Config.Reserved[i].Name == name {
+				return p.Config.Reserved[i]
+			}
+		}
+	} else {
+		for i := 0; i < len(p.Partitions); i++ {
+			if *p.Partitions[i].Name == name {
+				return p.Partitions[i]
+			}
 		}
 	}
 	return nil
 }
-func (p *Parted) GetPartitionByNum(num int) *Partition {
-	for i := 0; i < len(p.Partitions); i++ {
-		if *p.Partitions[i].Number == num {
-			return p.Partitions[i]
+func (p *Parted) GetPartitionByNum(reserved bool, num int) *Partition {
+	if reserved {
+		for i := 0; i < len(p.Config.Reserved); i++ {
+			if *p.Config.Reserved[i].Number == num {
+				return p.Config.Reserved[i]
+			}
+		}
+	} else {
+		for i := 0; i < len(p.Partitions); i++ {
+			if *p.Partitions[i].Number == num {
+				return p.Partitions[i]
+			}
 		}
 	}
 	return nil
+}
+func (p *Parted) GetUserDataPartitions(reserved bool) []*Partition {
+	if reserved {
+		return p.Config.UserData
+	}
+	userData := make([]*Partition, 0)
+	for i := 0; i < len(p.Config.UserData); i++ {
+		if p.Config.UserData[i].Name != nil {
+			part := p.GetPartitionByName(false, *p.Config.UserData[i].Name)
+			if part != nil {
+				userData = append(userData, part)
+			}
+		} else if p.Config.UserData[i].Number != nil {
+			part := p.GetPartitionByNum(false, *p.Config.UserData[i].Number)
+			if part != nil {
+				userData = append(userData, part)
+			}
+		}
+	}
+	return userData
 }
 
 func NewParted(pathJSON string) *Parted {
