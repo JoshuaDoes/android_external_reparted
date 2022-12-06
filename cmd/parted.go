@@ -39,8 +39,11 @@ type Parted struct {
 }
 
 type PartedConfig struct {
+	Parted string `json:"parted"` //Path to parted executable
+	Fsck   string `json:"fsck"`   //Path to fsck executable (such as e2fsck)
+	Resize string `json:"resize"` //Path to resize executable (such as resize2fs)
+
 	Disk string `json:"disk"`               //Path to raw disk device
-	Parted string `json:"parted"`           //Path to parted executable
 	Reserved []*Partition `json:"reserved"` //Partitions that must shrink/expand to fit new definitions
 	UserData []*Partition `json:"userdata"` //Partitions that should dynamically readjust to leftover space
 }
@@ -154,13 +157,13 @@ func NewParted(pathJSON string) (*Parted, error) {
 		if partedCfg.Reserved[i].GetSize() <= 0 {
 			return nil, fmt.Errorf("Invalid size specified for reserved partition %d", i+1)
 		}
-		if *partedCfg.Reserved[i].Name == "" && *partedCfg.Reserved[i].Number == 0 {
-			return nil, fmt.Errorf("Must specify either name or number for reserved partition %d", i+1)
+		if *partedCfg.Reserved[i].Name == "" {
+			return nil, fmt.Errorf("Must specify name for reserved partition %d", i+1)
 		}
 	}
 	for i := 0; i < len(partedCfg.UserData); i++ {
-		if *partedCfg.UserData[i].Name == "" && *partedCfg.UserData[i].Number == 0 {
-			return nil, fmt.Errorf("Must specify either name or number for userdata partition %d", i+1)
+		if *partedCfg.UserData[i].Name == "" {
+			return nil, fmt.Errorf("Must specify name for userdata partition %d", i+1)
 		}
 	}
 
@@ -284,6 +287,14 @@ func NewParted(pathJSON string) (*Parted, error) {
 	p.TableSize = p.DiskSize - p.PartsSize
 	if p.TableSize < 0 {
 		return nil, fmt.Errorf("Parsed disk size, %d, is %d bytes less than counted partition sizes, %d - parted must be out of touch", p.DiskSize, p.TableSize * -1, p.PartsSize)
+	}
+
+	for i := 0; i < len(p.Config.Reserved); i++ {
+		p.Config.Reserved[i].Parted = p
+		if p.Config.Reserved[i].Wipe {
+			partActual := p.GetPartition(false, p.Config.Reserved[i])
+			partActual.Wipe = true
+		}
 	}
 
 	return p, nil

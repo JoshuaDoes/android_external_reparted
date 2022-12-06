@@ -21,7 +21,7 @@ func init() {
 }
 
 var (
-	logPrefix = "[reparted] " // A log prefix to be used for all log messages.
+	logPrefix = " [reparted] " // A log prefix to be used for all log messages.
 )
 
 func main() {
@@ -63,7 +63,7 @@ func main() {
 		// Check if the reserved partition matches an existing partition on the disk.
 		partActual := p.GetPartition(false, partReserved)
 		if partActual == nil {
-			log("Reserved partition %s could not be matched to disk, adding to create list", *partReserved.Name)
+			log("Reserved partition %s could not be matched to disk, adding to create list", partReserved.GetName())
 			partsCreate = append(partsCreate, partReserved)
 		}
 
@@ -116,15 +116,31 @@ func main() {
 	partsMove := make([]*Partition, 0)
 	for i := 0; i < len(partsReserved); i++ {
 		if partsReserved[i].GetSize() < partsActual[i].GetSize() {
-			log("Added to shrink list: %s (%s -> %s)", *partsReserved[i].Name, partsActual[i].GetSizeHuman(), partsReserved[i].GetSizeHuman())
+			log("Added to shrink list: %s (%s -> %s)", partsReserved[i].GetName(), partsActual[i].GetSizeHuman(), partsReserved[i].GetSizeHuman())
 			partsShrink = append(partsShrink, partsReserved[i])
 		} else if partsReserved[i].GetSize() > partsActual[i].GetSize() {
-			log("Added to grow list: %s (%s -> %s)", *partsReserved[i].Name, partsActual[i].GetSizeHuman(), partsReserved[i].GetSizeHuman())
+			log("Added to grow list: %s (%s -> %s)", partsReserved[i].GetName(), partsActual[i].GetSizeHuman(), partsReserved[i].GetSizeHuman())
 			partsGrow = append(partsGrow, partsReserved[i])
 		}
 		if partsReserved[i].Number == nil {
-			log("Added to move list: %s", *partsReserved[i].Name)
+			log("Added to move list: %s", partsReserved[i].GetName())
 			partsMove = append(partsMove, partsReserved[i])
+		}
+	}
+
+	log("Running fsck on partitions that must be wiped")
+	for i := 0; i < len(partsActual); i++ {
+		err = partsActual[i].Fsck()
+		if err != nil {
+			fatal("Failed to fsck %s: %v", partsActual[i].GetName(), err)
+		}
+	}
+
+	log("Attempting to shrink partitions that must be shrunk")
+	for i := 0; i < len(partsShrink); i++ {
+		err = partsShrink[i].Resize()
+		if err != nil {
+			fatal("Failed to resize %s: %v", partsShrink[i].GetName(), err)
 		}
 	}
 }
@@ -138,11 +154,17 @@ func bytes(num int64) string {
 func log(msg ...interface{}) {
 	if len(msg) > 0 {
 		fmt.Printf(logPrefix)
+		logMsg := msg[0].(string)
 		if len(msg) > 1 {
-			fmt.Printf(msg[0].(string) + "\n", msg[1:]...)
-		} else {
-			fmt.Println(msg[0].(string))
+			logMsg = fmt.Sprintf(msg[0].(string), msg[1:]...)
 		}
+		for {
+			if logMsg[len(logMsg)-1] != '\n' {
+				break
+			}
+			logMsg = string(logMsg[:len(logMsg)-1])
+		}
+		fmt.Println(logMsg)
 	}
 }
 

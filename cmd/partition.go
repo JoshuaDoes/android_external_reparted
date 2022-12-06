@@ -18,6 +18,8 @@ type Partition struct {
 	Name *string `json:"name,omitempty"`
 	Flags *string `json:"flags,omitempty"`
 	File *os.File `json:"-"`
+
+	Wipe bool `json:"wipe"` //Prevents running fsck and resize operations
 }
 
 func NewPartition(parted *Parted, num int, start, end int64, size, fs, name, flags string) *Partition {
@@ -31,6 +33,56 @@ func NewPartition(parted *Parted, num int, start, end int64, size, fs, name, fla
 		Name: &name,
 		Flags: &flags,
 	}
+}
+
+func (part *Partition) Unmount() {
+	partActual := part.Parted.GetPartition(false, part)
+	if partActual == nil {
+		return
+	}
+	_, _ = Run("umount", partActual.GetPath())
+}
+
+func (part *Partition) Resize() error {
+	part.Unmount()
+	if !part.Wipe {
+		return nil
+	}
+
+	partActual := part.Parted.GetPartition(false, part)
+	if partActual == nil {
+		return fmt.Errorf("resize: Actual partition %s not found", part.GetName())
+	}
+	_, err := Run(part.Parted.Config.Resize, partActual.GetPath())
+	if err != nil {
+		return fmt.Errorf("resize %s: %v", partActual.GetPath(), err)
+	}
+	return nil
+}
+
+func (part *Partition) Fsck() error {
+	part.Unmount()
+	if !part.Wipe {
+		return nil
+	}
+
+	partActual := part.Parted.GetPartition(false, part)
+	if partActual == nil {
+		return fmt.Errorf("fsck: Actual partition %s not found", part.GetName())
+	}
+	_, err := Run(part.Parted.Config.Fsck, partActual.GetPath())
+	if err != nil {
+		return fmt.Errorf("fsck %s: %v", partActual.GetPath(), err)
+	}
+	return nil
+}
+
+func (part *Partition) GetPath() string {
+	return fmt.Sprintf("%s%d", part.Parted.Config.Disk, *part.Number)
+}
+
+func (part *Partition) GetName() string {
+	return *part.Name
 }
 
 func (part *Partition) GetSize() int64 {

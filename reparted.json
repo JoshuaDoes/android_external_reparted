@@ -1,12 +1,14 @@
 {
-	"disk": "/dev/block/sda",
 	"parted": "./parted",
+	"fsck": "/sbin/e2fsck -p -f",
+	"resize": "/sbin/resize2fs",
+	"disk": "/dev/block/sda",
 	"reserved": [
-		{"name": "BOOT", "num": 5, "size": "100MiB"},
-		{"name": "RECOVERY", "num": 6, "size": "100MiB"},
-		{"name": "HIDDEN", "size": "350MiB"},
-		{"name": "SYSTEM", "size": "5GiB"},
-		{"name": "CACHE", "size": "100MiB"}
+		{"name": "BOOT", "num": 5, "size": "100MB"},
+		{"name": "RECOVERY", "num": 6, "size": "100MB"},
+		{"name": "HIDDEN", "size": "350MB", "wipe": true},
+		{"name": "SYSTEM", "size": "5GB", "wipe": true},
+		{"name": "CACHE", "size": "100MB", "wipe": true}
 	],
 	"userdata": [
 		{"name": "USERDATA"}
