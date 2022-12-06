@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"strings"
 )
 
@@ -46,14 +45,9 @@ type PartedConfig struct {
 	UserData []*Partition `json:"userdata"` //Partitions that should dynamically readjust to leftover space
 }
 
-func (p *Parted) Run(args string) string {
+func (p *Parted) Run(args string) (string, error) {
 	args = p.Config.Disk + " unit B " + args
-	ret, err := exec.Command(p.Config.Parted, strings.Split(args, " ")...).Output()
-	if err != nil {
-		panic(fmt.Sprintf("Failed to call parted: %v", err))
-	}
-
-	return string(ret)
+	return Run(p.Config.Parted, args)
 }
 
 func (p *Parted) Close() {
@@ -139,34 +133,34 @@ func (p *Parted) GetUserDataPartitions(reserved bool) []*Partition {
 	return userData
 }
 
-func NewParted(pathJSON string) *Parted {
+func NewParted(pathJSON string) (*Parted, error) {
 	partedJSON, err := os.ReadFile(pathJSON)
 	if err != nil {
-		panic(fmt.Sprintf("Failed to open JSON for reading from %s: %v", pathJSON, err))
+		return nil, fmt.Errorf("Failed to open JSON for reading from %s: %v", pathJSON, err)
 	}
 
 	partedCfg := &PartedConfig{}
 	if err := json.Unmarshal(partedJSON, &partedCfg); err != nil {
-		panic(fmt.Sprintf("Failed to load JSON from %s: %v", pathJSON, err))
+		return nil, fmt.Errorf("Failed to load JSON from %s: %v", pathJSON, err)
 	}
 
 	if partedCfg.Disk == "" {
-		panic(fmt.Sprintf("No disk specified"))
+		return nil, fmt.Errorf("No disk specified")
 	}
 	if partedCfg.Parted == "" {
-		panic(fmt.Sprintf("No parted executable specified"))
+		return nil, fmt.Errorf("No parted executable specified")
 	}
 	for i := 0; i < len(partedCfg.Reserved); i++ {
 		if partedCfg.Reserved[i].GetSize() <= 0 {
-			panic(fmt.Sprintf("Invalid size specified for reserved partition %d", i+1))
+			return nil, fmt.Errorf("Invalid size specified for reserved partition %d", i+1)
 		}
 		if *partedCfg.Reserved[i].Name == "" && *partedCfg.Reserved[i].Number == 0 {
-			panic(fmt.Sprintf("Must specify either name or number for reserved partition %d", i+1))
+			return nil, fmt.Errorf("Must specify either name or number for reserved partition %d", i+1)
 		}
 	}
 	for i := 0; i < len(partedCfg.UserData); i++ {
 		if *partedCfg.UserData[i].Name == "" && *partedCfg.UserData[i].Number == 0 {
-			panic(fmt.Sprintf("Must specify either name or number for userdata partition %d", i+1))
+			return nil, fmt.Errorf("Must specify either name or number for userdata partition %d", i+1)
 		}
 	}
 
@@ -174,14 +168,19 @@ func NewParted(pathJSON string) *Parted {
 
 	raw, err := os.Open(p.Config.Disk)
 	if err != nil {
-		panic(fmt.Sprintf("Failed to open disk %s: %v", p.Config.Disk, err))
+		return nil, fmt.Errorf("Failed to open disk %s: %v", p.Config.Disk, err)
 	}
 	p.File = raw
 
-	partsWithFree := strings.Split(p.PrintFree(), "\n")
+	partsWithFree, err := p.PrintFree()
+	if err != nil {
+		return nil, fmt.Errorf("Failed to get partition list: %v", err)
+	}
+
+	partsLines := strings.Split(partsWithFree, "\n")
 	header := true
-	for i := 0; i < len(partsWithFree); i++ {
-		line := partsWithFree[i]
+	for i := 0; i < len(partsLines); i++ {
+		line := partsLines[i]
 		if line == "" {
 			continue
 		}
@@ -196,12 +195,12 @@ func NewParted(pathJSON string) *Parted {
 				case "Disk " + p.Config.Disk:
 					_, err = fmt.Sscanf(val, "%dB", &p.DiskSize)
 					if err != nil {
-						panic(fmt.Sprintf("Failed to scan size of disk %s: %v", p.Config.Disk, err))
+						return nil, fmt.Errorf("Failed to scan size of disk %s: %v", p.Config.Disk, err)
 					}
 				case "Sector size (logical/physical)":
 					_, err = fmt.Sscanf(val, "%dB/%dB", &p.SectorSizeLogical, &p.SectorSizePhysical)
 					if err != nil {
-						panic(fmt.Sprintf("Failed to scan logical/physical sector size of disk %s: %v", p.Config.Disk, err))
+						return nil, fmt.Errorf("Failed to scan logical/physical sector size of disk %s: %v", p.Config.Disk, err)
 					}
 				case "Partition Table":
 					p.PartitionTable = strings.ToUpper(val)
@@ -243,34 +242,34 @@ func NewParted(pathJSON string) *Parted {
 
 			counter := 0
 			_, err := fmt.Sscanf(line[0:p.HeaderSizes["Number"]], "%d", &partNum)
-			if err != nil && err != io.EOF { panic(fmt.Sprintf("Failed to scan partition number: %v", err)) }
+			if err != nil && err != io.EOF { return nil, fmt.Errorf("Failed to scan partition number: %v", err) }
 			counter += p.HeaderSizes["Number"]
 			_, err = fmt.Sscanf(line[counter:counter+p.HeaderSizes["Start"]], "%dB", &partStart)
-			if err != nil && err != io.EOF { panic(fmt.Sprintf("Failed to scan partition start: %v", err)) }
+			if err != nil && err != io.EOF { return nil, fmt.Errorf("Failed to scan partition start: %v", err) }
 			counter += p.HeaderSizes["Start"]
 			_, err = fmt.Sscanf(line[counter:counter+p.HeaderSizes["End"]], "%dB", &partEnd)
-			if err != nil && err != io.EOF { panic(fmt.Sprintf("Failed to scan partition end: %v", err)) }
+			if err != nil && err != io.EOF { return nil, fmt.Errorf("Failed to scan partition end: %v", err) }
 			counter += p.HeaderSizes["End"]
 			_, err = fmt.Sscanf(line[counter:counter+p.HeaderSizes["Size"]], "%s", &partSize)
-			if err != nil && err != io.EOF { panic(fmt.Sprintf("Failed to scan partition size: %v", err)) }
+			if err != nil && err != io.EOF { return nil, fmt.Errorf("Failed to scan partition size: %v", err) }
 			counter += p.HeaderSizes["Size"]
 			if counter+p.HeaderSizes["File system"] >= len(line) {
 				partFS = string(line[counter:])
 			} else {
 				_, err = fmt.Sscanf(line[counter:counter+p.HeaderSizes["File system"]], "%s", &partFS)
-				if err != nil && err != io.EOF { panic(fmt.Sprintf("Failed to scan partition filesystem: %v", err)) }
+				if err != nil && err != io.EOF { return nil, fmt.Errorf("Failed to scan partition filesystem: %v", err) }
 				counter += p.HeaderSizes["File system"]
 				_, err = fmt.Sscanf(line[counter:counter+p.HeaderSizes["Name"]], "%s", &partName)
-				if err != nil && err != io.EOF { panic(fmt.Sprintf("Failed to scan partition name: %v", err)) }
+				if err != nil && err != io.EOF { return nil, fmt.Errorf("Failed to scan partition name: %v", err) }
 				counter += p.HeaderSizes["Name"]
 				_, err = fmt.Sscanf(line[counter:], "%s", &partFlags)
-				if err != nil && err != io.EOF { panic(fmt.Sprintf("Failed to scan partition flags: %v", err)) }
+				if err != nil && err != io.EOF { return nil, fmt.Errorf("Failed to scan partition flags: %v", err) }
 			}
 
 			part := NewPartition(p, partNum, partStart, partEnd, partSize, partFS, partName, partFlags)
 			realSize := part.GetSize()
 			if realSize < 0 {
-				panic(fmt.Sprintf("Failed to parse partiton size %s", partSize))
+				return nil, fmt.Errorf("Failed to parse partiton size %s", partSize)
 			}
 
 			p.Partitions = append(p.Partitions, part)
@@ -284,27 +283,27 @@ func NewParted(pathJSON string) *Parted {
 
 	p.TableSize = p.DiskSize - p.PartsSize
 	if p.TableSize < 0 {
-		panic(fmt.Sprintf("Parsed disk size, %d, is %d bytes less than counted partition sizes, %d - parted must be out of touch", p.DiskSize, p.TableSize * -1, p.PartsSize))
+		return nil, fmt.Errorf("Parsed disk size, %d, is %d bytes less than counted partition sizes, %d - parted must be out of touch", p.DiskSize, p.TableSize * -1, p.PartsSize)
 	}
 
-	return p
+	return p, nil
 }
 
-func (p *Parted) Version() string {
+func (p *Parted) Version() (string, error) {
 	return p.Run("--version")
 }
 
-func (p *Parted) Help() string {
+func (p *Parted) Help() (string, error) {
 	return p.Run("--help")
 }
 
-func (p *Parted) PrintList(all bool) string {
+func (p *Parted) PrintList(all bool) (string, error) {
 	if all {
 		return p.Run("print all")
 	}
 	return p.Run("print list")
 }
 
-func (p *Parted) PrintFree() string {
+func (p *Parted) PrintFree() (string, error) {
 	return p.Run("print free")
 }

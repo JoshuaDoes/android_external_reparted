@@ -26,7 +26,11 @@ var (
 
 func main() {
 	// Create a new Parted struct and initialize it with configuration data from a JSON file.
-	p := NewParted(filepath.Base(os.Args[0]) + ".json")
+	p, err := NewParted(filepath.Base(os.Args[0]) + ".json")
+	if err != nil {
+		fatal("Failed to create parted instance: %v", err)
+	}
+
 	log("Loaded parted for disk " + p.Config.Disk)
 	defer p.Close()
 
@@ -45,7 +49,10 @@ func main() {
 	log("Size of partition table: %s (partitions: %s)", bytes(p.TableSize), bytes(p.PartsSize))
 
 	// Calculate the total amount of space that needs to be reserved for the new partition table.
+	// Store the reserved partitions and the actual partitions that will be modified.
 	reserve := int64(0)
+	reserveParts := make([]*Partition, 0)
+	actualParts := make([]*Partition, 0)
 	for i := 0; i < len(p.Config.Reserved); i++ {
 		// Add the expected reservation to the total reserve size.
 		reservePart := p.Config.Reserved[i]
@@ -62,6 +69,11 @@ func main() {
 		// If reserve is 300MiB and actual is 400MiB, subtracting 400MiB results in -100MiB.
 		actualSize := actualPart.GetSize()
 		reserve -= actualSize // Subtract only the amount that's already reserved.
+
+		//Add the reserved partition to the reserved partitions list
+		reserveParts = append(reserveParts, reservePart)
+		//Add the actual partition to the actual partitions list
+		actualParts = append(actualParts, actualPart)
 	}
 
 	// Calculate space to be freed or reserved for new partition table.
