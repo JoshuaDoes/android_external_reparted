@@ -1,16 +1,14 @@
 package main
 
 import (
-	"fmt"
 	"os/exec"
 	"strings"
 )
 
 func Run(prog, args string) (string, error) {
 	ret, err := exec.Command(prog, strings.Split(args, " ")...).Output()
-	if err != nil {
-		return "", fmt.Errorf("Failed to call %s: %v", prog, err)
+	if len(ret) > 0 {
+		err = nil //Hack to get around programs that exit non-zero, we always want the output
 	}
-
-	return string(ret), nil
+	return string(ret), err
 }
