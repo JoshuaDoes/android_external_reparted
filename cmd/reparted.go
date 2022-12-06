@@ -74,6 +74,16 @@ func main() {
 	} else {
 		log("No additional space will be freed or reserved for new partition table")
 	}
+
+	reserveUserData := p.GetUserDataPartitions(true)
+	if len(reserveUserData) == 0 {
+		fatal("No userdata partitions specified for resizing")
+	}
+
+	actualUserData := p.GetUserDataPartitions(false)
+	if len(actualUserData) != len(reserveUserData) {
+		fatal("Actual count of userdata partitions (%d) does not match count in config (%d), too risky", len(actualUserData), len(reserveUserData))
+	}
 }
 
 // Convert a number of bytes to a human-readable string.
@@ -98,7 +108,10 @@ func log(msg ...interface{}) {
 // This function is similar to the log() function, but it also prints the
 // "!!!FATAL!!!" log message and exits the program with a non-zero exit code.
 func fatal(msg ...interface{}) {
-	log("!!!FATAL!!!")
+	if len(msg) >= 1 {
+		fatalMsg := "!!!FATAL!!! " + msg[0].(string)
+		msg[0] = fatalMsg
+	}
 	log(msg...)
 	os.Exit(1)
 }
