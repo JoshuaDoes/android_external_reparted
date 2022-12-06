@@ -10,19 +10,31 @@ import (
 	"strings"
 )
 
+// A struct representing a disk for parted.
 type Parted struct {
+	// The configuration data for the Parted struct.
 	Config *PartedConfig
 
+	// The disk model, such as "ATA VBOX HARDDISK".
 	DiskModel string
+	// The disk flags, such as "msftdata".
 	DiskFlags string
-	PartitionTable string //GPT, MBR, etc...
+	// The partition table type, such as "gpt".
+	PartitionTable string
+	// The logical sector size of the disk.
 	SectorSizeLogical int
+	// The physical sector size of the disk.
 	SectorSizePhysical int
+	// The total size of the disk in bytes.
 	DiskSize int64
+	// The size of the partition table in bytes.
 	TableSize int64
+	// The size of the partitions in bytes.
 	PartsSize int64
 
+	// The file descriptor for the disk.
 	File *os.File
+	// A map containing the sizes of various table headers from parted for table parsing.
 	HeaderSizes map[string]int
 	Partitions []*Partition
 }
