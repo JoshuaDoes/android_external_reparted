@@ -52,7 +52,6 @@ func main() {
 	// Store the reserved partitions and the actual partitions that will be modified.
 	reserve := int64(0)
 	partsReserved := make([]*Partition, 0)
-	partsActual := make([]*Partition, 0)
 	partsCreate := make([]*Partition, 0)
 	for i := 0; i < len(p.Config.Reserved); i++ {
 		// Add the expected reservation to the total reserve size.
@@ -74,11 +73,9 @@ func main() {
 
 		//Add the reserved partition to the reserved partitions list
 		partsReserved = append(partsReserved, partReserved)
-		//Add the actual partition to the actual partitions list
-		partsActual = append(partsActual, partActual)
 	}
 
-	if len(partsReserved) == 0 || len(partsActual) == 0 {
+	if len(partsReserved) == 0 {
 		fatal("No reserved partitions specified for resizing")
 	}
 
@@ -111,15 +108,25 @@ func main() {
 		fatal("Need to reserve %s, %s larger than size of userdata %s", bytes(reserve), bytes(reserve - sizeUserData), bytes(sizeUserData))
 	}
 
+	log("Running fsck on partitions that must be wiped")
+	for i := 0; i < len(partsReserved); i++ {
+		err = partsReserved[i].Fsck()
+		if err != nil {
+			fatal("Failed to fsck %s: %v", partsReserved[i].GetName(), err)
+		}
+	}
+
 	partsShrink := make([]*Partition, 0)
 	partsGrow := make([]*Partition, 0)
 	partsMove := make([]*Partition, 0)
 	for i := 0; i < len(partsReserved); i++ {
-		if partsReserved[i].GetSize() < partsActual[i].GetSize() {
-			log("Added to shrink list: %s (%s -> %s)", partsReserved[i].GetName(), partsActual[i].GetSizeHuman(), partsReserved[i].GetSizeHuman())
+		partActual := p.GetPartition(false, partsReserved[i])
+		oldSize := partActual.GetSize()
+		if partsReserved[i].GetSize() < oldSize {
+			log("Added to shrink list: %s (%d -> %d)", partsReserved[i].GetName(), oldSize, partsReserved[i].GetSize())
 			partsShrink = append(partsShrink, partsReserved[i])
-		} else if partsReserved[i].GetSize() > partsActual[i].GetSize() {
-			log("Added to grow list: %s (%s -> %s)", partsReserved[i].GetName(), partsActual[i].GetSizeHuman(), partsReserved[i].GetSizeHuman())
+		} else if partsReserved[i].GetSize() > oldSize {
+			log("Added to grow list: %s (%d -> %d)", partsReserved[i].GetName(), oldSize, partsReserved[i].GetSize())
 			partsGrow = append(partsGrow, partsReserved[i])
 		}
 		if partsReserved[i].Number == nil {
@@ -128,19 +135,21 @@ func main() {
 		}
 	}
 
-	log("Running fsck on partitions that must be wiped")
-	for i := 0; i < len(partsActual); i++ {
-		err = partsActual[i].Fsck()
-		if err != nil {
-			fatal("Failed to fsck %s: %v", partsActual[i].GetName(), err)
-		}
-	}
-
-	log("Attempting to shrink partitions that must be shrunk")
-	for i := 0; i < len(partsShrink); i++ {
-		err = partsShrink[i].Resize()
-		if err != nil {
-			fatal("Failed to resize %s: %v", partsShrink[i].GetName(), err)
+	if len(partsShrink) > 0 {
+		log("Attempting to shrink partitions")
+		for i := 0; i < len(partsShrink); i++ {
+			partActual := p.GetPartition(false, partsShrink[i])
+			oldSize := partActual.GetSize()
+			if partsShrink[i].GetSize() > oldSize {
+				log("Skipping shrinking of %s (%d is greater than %d)", partsShrink[i].GetName(), oldSize, partsShrink[i].GetSize())
+				continue
+			}
+			err = partsShrink[i].Resize()
+			if err != nil {
+				fatal("Failed to resize %s: %v", partsShrink[i].GetName(), err)
+			}
+			log("Requested size: %d", partsShrink[i].GetSize())
+			log("Resized %s: %d -> %d", partsShrink[i].GetName(), oldSize, partActual.GetSize())
 		}
 	}
 }

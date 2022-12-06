@@ -6,9 +6,9 @@
 	"reserved": [
 		{"name": "BOOT", "num": 5, "size": "100MB"},
 		{"name": "RECOVERY", "num": 6, "size": "100MB"},
-		{"name": "HIDDEN", "size": "350MB", "wipe": true},
-		{"name": "SYSTEM", "size": "5GB", "wipe": true},
-		{"name": "CACHE", "size": "100MB", "wipe": true}
+		{"name": "HIDDEN", "size": "350003200B", "wipe": true},
+		{"name": "SYSTEM", "size": "5000003584B", "wipe": true},
+		{"name": "CACHE", "size": "100003840B", "wipe": true}
 	],
 	"userdata": [
 		{"name": "USERDATA"}

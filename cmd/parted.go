@@ -49,7 +49,11 @@ type PartedConfig struct {
 }
 
 func (p *Parted) Run(args string) (string, error) {
-	args = p.Config.Disk + " unit B " + args
+	//-s --script: Prevents interactive prompts
+	//-f --fix: Don't abort when asked interactive things
+	//---pretend-input-tty: Undocumented way to allow scripting
+	//unit B: Always use bytes instead of human-readable sizes
+	args = "--script --fix " + p.Config.Disk + " ---pretend-input-tty unit B " + args
 	return Run(p.Config.Parted, args)
 }
 
@@ -262,11 +266,15 @@ func NewParted(pathJSON string) (*Parted, error) {
 				_, err = fmt.Sscanf(line[counter:counter+p.HeaderSizes["File system"]], "%s", &partFS)
 				if err != nil && err != io.EOF { return nil, fmt.Errorf("Failed to scan partition filesystem: %v", err) }
 				counter += p.HeaderSizes["File system"]
-				_, err = fmt.Sscanf(line[counter:counter+p.HeaderSizes["Name"]], "%s", &partName)
-				if err != nil && err != io.EOF { return nil, fmt.Errorf("Failed to scan partition name: %v", err) }
-				counter += p.HeaderSizes["Name"]
-				_, err = fmt.Sscanf(line[counter:], "%s", &partFlags)
-				if err != nil && err != io.EOF { return nil, fmt.Errorf("Failed to scan partition flags: %v", err) }
+				if counter+p.HeaderSizes["Name"] >= len(line) {
+					partName = string(line[counter:])
+				} else {
+					_, err = fmt.Sscanf(line[counter:counter+p.HeaderSizes["Name"]], "%s", &partName)
+					if err != nil && err != io.EOF { return nil, fmt.Errorf("Failed to scan partition name: %v", err) }
+					counter += p.HeaderSizes["Name"]
+					_, err = fmt.Sscanf(line[counter:], "%s", &partFlags)
+					if err != nil && err != io.EOF { return nil, fmt.Errorf("Failed to scan partition flags: %v", err) }
+				}
 			}
 
 			part := NewPartition(p, partNum, partStart, partEnd, partSize, partFS, partName, partFlags)
@@ -291,21 +299,31 @@ func NewParted(pathJSON string) (*Parted, error) {
 
 	for i := 0; i < len(p.Config.Reserved); i++ {
 		p.Config.Reserved[i].Parted = p
-		if p.Config.Reserved[i].Wipe {
-			partActual := p.GetPartition(false, p.Config.Reserved[i])
-			partActual.Wipe = true
+		partActual := p.GetPartition(false, p.Config.Reserved[i])
+		if partActual != nil {
+			if p.Config.Reserved[i].Wipe {
+				partActual.Wipe = true
+			}
 		}
 	}
 
 	return p, nil
 }
 
-func (p *Parted) Version() (string, error) {
-	return p.Run("--version")
-}
-
 func (p *Parted) Help() (string, error) {
 	return p.Run("--help")
+}
+
+func (p *Parted) MkPart(start, end int64) (string, error) {
+	return p.Run(fmt.Sprintf("mkpart primary %d %d", start, end))
+}
+
+func (p *Parted) Name(num int, name string) (string, error) {
+	return p.Run(fmt.Sprintf("name %d %s", num, name))
+}
+
+func (p *Parted) PrintFree() (string, error) {
+	return p.Run("print free")
 }
 
 func (p *Parted) PrintList(all bool) (string, error) {
@@ -315,6 +333,43 @@ func (p *Parted) PrintList(all bool) (string, error) {
 	return p.Run("print list")
 }
 
-func (p *Parted) PrintFree() (string, error) {
-	return p.Run("print free")
+func (p *Parted) ResizePart(num int, end int64) (string, error) {
+	actualPart := p.GetPartitionByNum(false, num)
+	if actualPart == nil {
+		return "", fmt.Errorf("parted: ResizePart: unable to find partition %d", num)
+	}
+	output, err := p.Rm(num)
+	if err != nil {
+		return output, fmt.Errorf("parted: ResizePart: failed to delete partition %d: %v", num, err)
+	}
+	output, err = p.MkPart(*actualPart.Start, *actualPart.End)
+	if err != nil {
+		return output, fmt.Errorf("parted: ResizePart: failed to create partition %d: %v", num, err)
+	}
+	output, err = p.Name(num, *actualPart.Name)
+	if err != nil {
+		return output, fmt.Errorf("parted: ResizePart: failed to name partition %d: %v", num, err)
+	}
+	output, err = p.Set(num, *actualPart.Flags, true)
+	if err != nil {
+		return output, fmt.Errorf("parted: ResizePart: failed to set flags for partition %d: %v", num, err)
+	}
+
+	return "", nil
+}
+
+func (p *Parted) Rm(num int) (string, error) {
+	return p.Run(fmt.Sprintf("rm %d", num))
+}
+
+func (p *Parted) Set(num int, flag string, state bool) (string, error) {
+	realState := "off"
+	if state {
+		realState = "on"
+	}
+	return p.Run(fmt.Sprintf("set %d %s %s", num, flag, realState))
+}
+
+func (p *Parted) Version() (string, error) {
+	return p.Run("--version")
 }

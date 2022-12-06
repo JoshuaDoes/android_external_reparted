@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 )
 
 type Partition struct {
@@ -53,10 +54,35 @@ func (part *Partition) Resize() error {
 	if partActual == nil {
 		return fmt.Errorf("resize: Actual partition %s not found", part.GetName())
 	}
-	_, err := Run(part.Parted.Config.Resize, partActual.GetPath())
+	output, err := Run(part.Parted.Config.Resize, fmt.Sprintf("%s %d", partActual.GetPath(), part.GetSizeBlocks512()))
 	if err != nil {
 		return fmt.Errorf("resize %s: %v", partActual.GetPath(), err)
 	}
+
+	outputSplit := strings.Split(output, " ")
+	newBlocks := int64(0)
+	for i := 0; i < len(outputSplit); i++ {
+		outputTest := strings.Join(outputSplit[i:], " ")
+		_, err = fmt.Sscanf(outputTest, "%d blocks", &newBlocks)
+		if err == nil {
+			break
+		}
+	}
+	if newBlocks == 0 {
+		return fmt.Errorf("resize: Failed to scan new block count")
+	}
+
+	//Update the partition info in memory
+	newSize := newBlocks * part.Parted.SectorSizeLogical
+	*partActual.Size = fmt.Sprintf("%dB", newSize)
+	*partActual.End = *partActual.Start + newSize
+
+	//Resize the actual partition using parted
+	_, err = part.Parted.ResizePart(*partActual.Number, *partActual.End)
+	if err != nil {
+		return fmt.Errorf("resize: Failed to call ResizePart: %v", err)
+	}
+
 	return nil
 }
 
@@ -91,6 +117,12 @@ func (part *Partition) GetSize() int64 {
 		panic(fmt.Sprintf("Failed to parse size: %v", err))
 	}
 	return int64(size)
+}
+
+func (part *Partition) GetSizeBlocks512() int64 {
+	size := part.GetSize()
+	size /= part.Parted.SectorSizeLogical
+	return size
 }
 
 func (part *Partition) GetSizeHuman() string {

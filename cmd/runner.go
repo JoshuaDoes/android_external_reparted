@@ -13,10 +13,10 @@ func Run(prog, args string) (string, error) {
 	}
 
 	ret, err := exec.Command(cmd[0], cmdArgs...).CombinedOutput()
-	if len(ret) > 0 {
-		err = nil //Hack to get around programs that exit non-zero, we always want the output
+	if len(ret) > 0 || (err != nil && err.Error() == "signal: aborted") {
+		err = nil //Hack to get around programs that exit non-zero or abort, we always want the output
 	}
-	log("RUN: %s %v\n%s", cmd[0], cmdArgs, string(ret))
+	//log("RUN: %s %v\n%s", cmd[0], cmdArgs, string(ret))
 	//log("RUN: %s %v", cmd[0], cmdArgs)
 	return string(ret), err
 }
