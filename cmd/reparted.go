@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 
 	"github.com/dustin/go-humanize"
-	"github.com/JoshuaDoes/json"
+	//"github.com/JoshuaDoes/json"
 )
 
 func init() {
@@ -35,12 +35,12 @@ func main() {
 	defer p.Close()
 
 	// Print out information about the disk and its partitions.
-	for i := 0; i < len(p.Partitions); i++ {
+	/*for i := 0; i < len(p.Partitions); i++ {
 		partJSON, err := json.Marshal(p.Partitions[i], false)
 		if err == nil {
 			log(string(partJSON))
 		}
-	}
+	}*/
 
 	log("Disk model: %s", p.DiskModel)
 	log("Disk total size: %s (%s logical / %s physical)", bytes(p.DiskSize), bytes(p.SectorSizeLogical), bytes(p.SectorSizePhysical))
@@ -51,29 +51,35 @@ func main() {
 	// Calculate the total amount of space that needs to be reserved for the new partition table.
 	// Store the reserved partitions and the actual partitions that will be modified.
 	reserve := int64(0)
-	reserveParts := make([]*Partition, 0)
-	actualParts := make([]*Partition, 0)
+	partsReserved := make([]*Partition, 0)
+	partsActual := make([]*Partition, 0)
+	partsCreate := make([]*Partition, 0)
 	for i := 0; i < len(p.Config.Reserved); i++ {
 		// Add the expected reservation to the total reserve size.
-		reservePart := p.Config.Reserved[i]
-		reserveSize := reservePart.GetSize()
-		reserve += reserveSize
+		partReserved := p.Config.Reserved[i]
+		reservedSize := partReserved.GetSize()
+		reserve += reservedSize
 
 		// Check if the reserved partition matches an existing partition on the disk.
-		actualPart := p.GetPartition(false, reservePart)
-		if actualPart == nil {
-			fatal("Reserved partition %d could not be matched to disk", i+1)
+		partActual := p.GetPartition(false, partReserved)
+		if partActual == nil {
+			log("Reserved partition %s could not be matched to disk, adding to create list", *partReserved.Name)
+			partsCreate = append(partsCreate, partReserved)
 		}
 
 		// Remove the actual size of the existing partition from the total reserve count.
 		// If reserve is 300MiB and actual is 400MiB, subtracting 400MiB results in -100MiB.
-		actualSize := actualPart.GetSize()
+		actualSize := partActual.GetSize()
 		reserve -= actualSize // Subtract only the amount that's already reserved.
 
 		//Add the reserved partition to the reserved partitions list
-		reserveParts = append(reserveParts, reservePart)
+		partsReserved = append(partsReserved, partReserved)
 		//Add the actual partition to the actual partitions list
-		actualParts = append(actualParts, actualPart)
+		partsActual = append(partsActual, partActual)
+	}
+
+	if len(partsReserved) == 0 || len(partsActual) == 0 {
+		fatal("No reserved partitions specified for resizing")
 	}
 
 	// Calculate space to be freed or reserved for new partition table.
@@ -87,14 +93,39 @@ func main() {
 		log("No additional space will be freed or reserved for new partition table")
 	}
 
-	reserveUserData := p.GetUserDataPartitions(true)
-	if len(reserveUserData) == 0 {
+	partsReservedUserData := p.GetUserDataPartitions(true)
+	if len(partsReservedUserData) == 0 {
 		fatal("No userdata partitions specified for resizing")
 	}
 
-	actualUserData := p.GetUserDataPartitions(false)
-	if len(actualUserData) != len(reserveUserData) {
-		fatal("Actual count of userdata partitions (%d) does not match count in config (%d), too risky", len(actualUserData), len(reserveUserData))
+	partsActualUserData := p.GetUserDataPartitions(false)
+	if len(partsActualUserData) != len(partsReservedUserData) {
+		fatal("Actual count of userdata partitions (%d) does not match count in config (%d), too risky", len(partsActualUserData), len(partsReservedUserData))
+	}
+
+	sizeUserData := int64(0)
+	for i := 0; i < len(partsActualUserData); i++ {
+		sizeUserData += partsActualUserData[i].GetSize()
+	}
+	if reserve > sizeUserData {
+		fatal("Need to reserve %s, %s larger than size of userdata %s", bytes(reserve), bytes(reserve - sizeUserData), bytes(sizeUserData))
+	}
+
+	partsShrink := make([]*Partition, 0)
+	partsGrow := make([]*Partition, 0)
+	partsMove := make([]*Partition, 0)
+	for i := 0; i < len(partsReserved); i++ {
+		if partsReserved[i].GetSize() < partsActual[i].GetSize() {
+			log("Added to shrink list: %s (%s -> %s)", *partsReserved[i].Name, partsActual[i].GetSizeHuman(), partsReserved[i].GetSizeHuman())
+			partsShrink = append(partsShrink, partsReserved[i])
+		} else if partsReserved[i].GetSize() > partsActual[i].GetSize() {
+			log("Added to grow list: %s (%s -> %s)", *partsReserved[i].Name, partsActual[i].GetSizeHuman(), partsReserved[i].GetSizeHuman())
+			partsGrow = append(partsGrow, partsReserved[i])
+		}
+		if partsReserved[i].Number == nil {
+			log("Added to move list: %s", *partsReserved[i].Name)
+			partsMove = append(partsMove, partsReserved[i])
+		}
 	}
 }
 

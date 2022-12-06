@@ -36,9 +36,22 @@ func NewPartition(parted *Parted, num int, start, end int64, size, fs, name, fla
 func (part *Partition) GetSize() int64 {
 	size, err := humanize.ParseBytes(*part.Size)
 	if err != nil {
-		return -1
+		panic(fmt.Sprintf("Failed to parse size: %v", err))
 	}
 	return int64(size)
+}
+
+func (part *Partition) GetSizeHuman() string {
+	if part.Size == nil {
+		size := humanize.Bytes(0)
+		return size
+	}
+
+	//Rewrite the human size into the largest byte size
+	size := part.GetSize()
+	sizeHuman := humanize.Bytes(uint64(size))
+
+	return sizeHuman
 }
 
 //CheckValidOrPanic checks if the partition is valid, otherwise it panics
