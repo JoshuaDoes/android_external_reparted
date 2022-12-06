@@ -14,7 +14,7 @@ type Partition struct {
 	Number *int `json:"num,omitempty"`
 	Start *int64 `json:"start,omitempty"`
 	End *int64 `json:"end,omitempty"`
-	Size *string `json:"size,omitempty"` //1MiB, 1MB, 1KiB, 1KB, etc
+	Size *string `json:"size,omitempty"` //1MiB, 1MB, 1KiB, 1KB, etc, must be dividable by logical block size
 	FS *string `json:"fs,omitempty"`
 	Name *string `json:"name,omitempty"`
 	Flags *string `json:"flags,omitempty"`
