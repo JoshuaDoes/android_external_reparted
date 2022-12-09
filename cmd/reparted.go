@@ -74,6 +74,12 @@ func main() {
 		//Add the reserved partition to the reserved partitions list
 		partsReserved = append(partsReserved, partReserved)
 	}
+	for i := 0; i < len(p.Partitions); i++ {
+		if *p.Partitions[i].Number != 0 || *p.Partitions[i].FS != "Free Space" {
+			continue
+		}
+		reserve -= p.Partitions[i].GetSize() //Subtract actual free space from the size we must reserve from userdata
+	}
 
 	if len(partsReserved) == 0 {
 		fatal("No reserved partitions specified for resizing")
@@ -102,6 +108,10 @@ func main() {
 
 	sizeUserData := int64(0)
 	for i := 0; i < len(partsActualUserData); i++ {
+		if *partsActualUserData[i].FS == "" {
+			panic(fmt.Sprintf("Unknown partition type for userdata partition %d", *partsActualUserData[i].Number))
+		}
+		log("Actual userdata partition %d: %s", *partsActualUserData[i].Number, *partsActualUserData[i].FS)
 		sizeUserData += partsActualUserData[i].GetSize()
 	}
 	if reserve > sizeUserData {

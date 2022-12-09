@@ -69,13 +69,23 @@ func (p *Parted) ReadDisk(offset int64, count int64) ([]byte, error) {
 	data := make([]byte, count)
 	read, err := p.File.ReadAt(data, offset)
 	if err != nil && err != io.EOF {
-		return nil, err
+		return nil, fmt.Errorf("ReadDisk: Failed to read bytes from offset %d: %v", offset, err)
 	}
 	if read < int(count) {
 		data = data[:read]
 	}
 
 	return data, nil
+}
+
+func (p *Parted) WriteDisk(offset int64, data []byte) error {
+	if _, err := p.File.Seek(offset, io.SeekStart); err != nil {
+		return fmt.Errorf("WriteDisk: Failed to seek to offset %d: %v", offset, err)
+	}
+	if _, err := p.File.Write(data); err != nil {
+		return fmt.Errorf("WriteDisk: Failed to write bytes at offset %d: %v", offset, err)
+	}
+	return nil
 }
 
 func (p *Parted) GetPartition(reserved bool, match *Partition) *Partition {
